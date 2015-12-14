@@ -15,14 +15,16 @@ module RailsAdmin
           RailsAdmin::Config::Fields::Types::register(self)
 
           register_instance_option :thumb_method do
-            return @thumb_method if defined? @thumb_method
-            @thumb_method ||= begin
-              attachment = bindings[:object].class.select{|m| m.is_a? Shrine::Attachment}.detect{|a| a.instance_variable_get("@name") == name.to_sym}
-              if attachment
-                versions = attachment.shrine_class.version_names 
-                versions.detect{|v| v.in?([:thumb, :thumbnail, 'thumb', 'thumbnail']) } || versions.first.to_s
-              end  
-            end  
+            unless defined? @thumb_method
+              @thumb_method ||= begin              
+                attacher = bindings[:object].try("#{name}_attacher".to_sym)              
+                if attacher
+                  versions = attacher.shrine_class.version_names 
+                  versions.detect{|v| v.in?([:thumb, :thumbnail, 'thumb', 'thumbnail']) } || versions.first.to_s
+                end  
+              end
+            end
+            @thumb_method  
           end
 
           register_instance_option :delete_method do
@@ -34,8 +36,12 @@ module RailsAdmin
           end
 
           def resource_url(thumb = false)
-            return nil unless (uploader = bindings[:object].send(name)).present?
-            thumb.present? ? uploader.url(thumb) : uploader.url
+            return nil unless (uploader = bindings[:object].send(name)).present?                        
+            if uploader.is_a? Hash # has versions
+              thumb.present? ? uploader[thumb].url : uploader[uploader.keys.first].url
+            else
+              uploader.url  
+            end  
           end
         end
       end
